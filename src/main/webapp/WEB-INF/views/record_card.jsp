@@ -1,0 +1,268 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>학생 성적 관리 프로그램 (수정 프로세스 개선)</title>
+    <style>
+        body { font-family: 'Malgun Gothic', sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; display: flex; flex-direction: column; align-items: center; }
+        h1 { color: #333; margin-bottom: 30px; }
+        .container { width: 100%; max-width: 1100px; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .input-group { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; background: #f9f9f9; padding: 20px; border-radius: 8px; }
+        .input-item { display: flex; flex-direction: column; }
+        .input-item label { font-size: 14px; margin-bottom: 5px; color: #666; font-weight: bold; }
+        .input-item input { padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 16px; }
+        .btn-container { display: flex; justify-content: flex-end; margin-bottom: 30px; }
+        #normal-btns, #edit-btns { display: flex; gap: 20px; } /* 버튼 간격 추가 확대 */
+
+        button { 
+            color: white; 
+            border: none; 
+            padding: 12px 25px; /* 가로 패딩 확대 */
+            border-radius: 6px; 
+            cursor: pointer; 
+            font-size: 15px; 
+            font-weight: bold; 
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        button:hover { 
+            opacity: 0.9; 
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+        .btn-add { background-color: #4CAF50; }
+        .btn-update { background-color: #2196F3; }
+        .btn-delete { background-color: #f44336; }
+        .btn-cancel { background-color: #9e9e9e; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #eee; padding: 12px; text-align: center; }
+        th { background-color: #f8f9fa; color: #333; }
+        tr:nth-child(even) { background-color: #fafafa; }
+        tr.selected { background-color: #fff9c4 !important; }
+        .rank { font-weight: bold; color: #e67e22; }
+        .average { font-weight: bold; color: #2980b9; }
+        .date-col { font-size: 12px; color: #888; }
+        input[type="checkbox"] { transform: scale(1.2); cursor: pointer; }
+        #edit-mode-indicator { display: none; color: #2196F3; font-weight: bold; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>학생 성적 관리 시스템</h1>
+
+    <div class="container">
+        <!-- 수정 모드 알림 -->
+        <div id="edit-mode-indicator">⚠️ 현재 학생 정보를 수정 중입니다...</div>
+        
+        <!-- 입력 섹션 -->
+        <input type="hidden" id="studentId">
+        <div class="input-group">
+            <div class="input-item">
+                <label for="name">학생 이름</label>
+                <input type="text" id="name" placeholder="이름 입력">
+            </div>
+            <div class="input-item">
+                <label for="kor">국어</label>
+                <input type="number" id="kor" min="0" max="100" value="0">
+            </div>
+            <div class="input-item">
+                <label for="eng">영어</label>
+                <input type="number" id="eng" min="0" max="100" value="0">
+            </div>
+            <div class="input-item">
+                <label for="math">수학</label>
+                <input type="number" id="math" min="0" max="100" value="0">
+            </div>
+        </div>
+
+        <div class="btn-container">
+            <!-- 일반 모드 버튼 -->
+            <div id="normal-btns">
+                <button class="btn-add" onclick="addStudent()">학생 추가</button>
+                <button class="btn-update" onclick="startEdit()">수정하기</button>
+                <button class="btn-delete" onclick="deleteStudents()">삭제하기</button>
+            </div>
+            <!-- 수정 모드 버튼 -->
+            <div id="edit-btns" style="display:none;">
+                <button class="btn-update" onclick="completeUpdate()">수정완료</button>
+                <button class="btn-cancel" onclick="cancelEdit()">취소</button>
+            </div>
+        </div>
+
+        <table id="resultTable">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" onclick="toggleAll(this)"></th>
+                    <th>이름</th>
+                    <th>국어</th>
+                    <th>영어</th>
+                    <th>수학</th>
+                    <th>총점</th>
+                    <th>평균</th>
+                    <th>석차</th>
+                    <th>입력일</th>
+                </tr>
+            </thead>
+            <tbody id="studentList"></tbody>
+        </table>
+    </div>
+
+    <script>
+        let currentStudents = [];
+
+        window.onload = loadGrades;
+
+        function handleResponse(response) {
+            return response.text().then(text => {
+                if (text === "success") return true;
+                if (text.startsWith("error:")) {
+                    alert("오류 발생: " + text.substring(6));
+                    return false;
+                }
+                return text;
+            });
+        }
+
+        function loadGrades() {
+            fetch('${pageContext.request.contextPath}/record/list')
+                .then(res => res.json())
+                .then(data => {
+                    currentStudents = data;
+                    const tbody = document.getElementById('studentList');
+                    tbody.innerHTML = "";
+                    data.forEach(s => {
+                        tbody.innerHTML += `
+                            <tr id="row-\${s.id}">
+                                <td><input type="checkbox" name="studentCheck" value="\${s.id}"></td>
+                                <td>\${s.studentName}</td>
+                                <td>\${s.kor}</td>
+                                <td>\${s.eng}</td>
+                                <td>\${s.math}</td>
+                                <td>\${s.totalScore}</td>
+                                <td class="average">\${s.avgScore.toFixed(2)}</td>
+                                <td class="rank">\${s.studentRank}위</td>
+                                <td class="date-col">\${s.createdAt}</td>
+                            </tr>
+                        `;
+                    });
+                });
+        }
+
+        // 추가하기
+        function addStudent() {
+            const name = document.getElementById('name').value;
+            if (!name) { alert("이름을 입력하세요."); return; }
+            
+            const data = {
+                studentName: name,
+                kor: parseInt(document.getElementById('kor').value) || 0,
+                eng: parseInt(document.getElementById('eng').value) || 0,
+                math: parseInt(document.getElementById('math').value) || 0
+            };
+
+            fetch('${pageContext.request.contextPath}/record/add', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(handleResponse).then(res => { if(res) { clearInputs(); loadGrades(); } });
+        }
+
+        // 수정하기 버튼 클릭 시 (데이터를 입력창으로 가져옴)
+        function startEdit() {
+            const checked = document.querySelectorAll('input[name="studentCheck"]:checked');
+            if (checked.length !== 1) {
+                alert("수정할 학생 한 명만 체크박스로 선택해주세요.");
+                return;
+            }
+
+            const id = parseInt(checked[0].value);
+            const student = currentStudents.find(s => s.id === id);
+            
+            if (student) {
+                // 입력창에 값 세팅
+                document.getElementById('studentId').value = student.id;
+                document.getElementById('name').value = student.studentName;
+                document.getElementById('kor').value = student.kor;
+                document.getElementById('eng').value = student.eng;
+                document.getElementById('math').value = student.math;
+
+                // UI 모드 전환
+                document.getElementById('normal-btns').style.display = 'none';
+                document.getElementById('edit-btns').style.display = 'flex';
+                document.getElementById('edit-mode-indicator').style.display = 'block';
+                
+                // 해당 행 강조
+                document.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected'));
+                document.getElementById('row-' + id).classList.add('selected');
+                
+                document.getElementById('name').focus();
+            }
+        }
+
+        // 수정완료 버튼 클릭 시 (서버에 전송)
+        function completeUpdate() {
+            const id = document.getElementById('studentId').value;
+            const data = {
+                id: parseInt(id),
+                studentName: document.getElementById('name').value,
+                kor: parseInt(document.getElementById('kor').value) || 0,
+                eng: parseInt(document.getElementById('eng').value) || 0,
+                math: parseInt(document.getElementById('math').value) || 0
+            };
+
+            fetch('${pageContext.request.contextPath}/record/update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            }).then(handleResponse).then(res => {
+                if(res) {
+                    alert("성공적으로 수정되었습니다.");
+                    cancelEdit();
+                    loadGrades();
+                }
+            });
+        }
+
+        // 수정 취소
+        function cancelEdit() {
+            clearInputs();
+            document.getElementById('normal-btns').style.display = 'flex';
+            document.getElementById('edit-btns').style.display = 'none';
+            document.getElementById('edit-mode-indicator').style.display = 'none';
+            document.querySelectorAll('tr').forEach(tr => tr.classList.remove('selected'));
+        }
+
+        // 삭제하기
+        function deleteStudents() {
+            const ids = Array.from(document.querySelectorAll('input[name="studentCheck"]:checked')).map(cb => parseInt(cb.value));
+            if (ids.length === 0) { alert("삭제할 학생을 체크해주세요."); return; }
+            if (!confirm("선택한 " + ids.length + "명의 학생을 삭제하시겠습니까?")) return;
+
+            fetch('${pageContext.request.contextPath}/record/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(ids)
+            }).then(handleResponse).then(res => { if(res) { loadGrades(); } });
+        }
+
+        function clearInputs() {
+            document.getElementById('studentId').value = "";
+            document.getElementById('name').value = "";
+            document.getElementById('kor').value = "0";
+            document.getElementById('eng').value = "0";
+            document.getElementById('math').value = "0";
+        }
+
+        function toggleAll(source) {
+            document.getElementsByName('studentCheck').forEach(cb => cb.checked = source.checked);
+        }
+    </script>
+</body>
+</html>

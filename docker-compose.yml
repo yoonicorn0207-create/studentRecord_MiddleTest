@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # 1. 데이터베이스 서비스 (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: student-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: kopodb
+      MYSQL_USER: kopouser
+      MYSQL_PASSWORD: kopouser
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3307:3306" # 외부 3307을 내부 3306으로 연결
+    volumes:
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql # 테이블 자동 생성
+      - db_data:/var/lib/mysql # 데이터 저장소 (볼륨)
+    networks:
+      - student-network
+
+  # 2. 백엔드 서비스 (Spring MVC)
+  backend:
+    build: .
+    container_name: student-backend
+    restart: always
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - student-network
+
+  # 3. 프론트엔드 서비스 (Node.js)
+  frontend:
+    build: ./frontend-node
+    container_name: student-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    networks:
+      - student-network
+
+# 공용 네트워크 설정
+networks:
+  student-network:
+    driver: bridge
+
+# 데이터 보존을 위한 볼륨 설정
+volumes:
+  db_data:

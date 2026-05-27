@@ -1,0 +1,28 @@
+# Maven
+target/
+*.war
+*.jar
+*.ear
+
+# IDE - Eclipse
+.settings/
+.project
+.classpath
+.factorypath
+.springBeans
+
+# IDE - IntelliJ
+.idea/
+*.iml
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Docker
+db_data/
