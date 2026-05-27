@@ -24,7 +24,6 @@
 		<property name="suffix" value=".jsp" />
 	</bean>
 
-	<import resource="beans.xml" />
-	<import resource="beans_product.xml" />
+	<import resource="beans_db.xml" />
 
 </beans>
